@@ -1,6 +1,4 @@
 package database
- 
-import "errors"
 
 type Chirp struct {
 	ID   int    `json:"id"`
@@ -42,17 +40,16 @@ func (db *DB) GetChirps() ([]Chirp, error) {
 	return chirps, nil
 }
 
-func (db *DB) GetChirpById(id int) (Chirp, error) {
+func (db *DB) GetChirp(id int) (Chirp, error) {
 	dbStructure, err := db.loadDB()
 	if err != nil {
 		return Chirp{}, err
 	}
 
-    for chirp_id, chirp := range dbStructure.Chirps {
-        if chirp_id == id {
-            return chirp, nil
-        }
-    }
-    return Chirp{}, errors.New("Chirp ID not found")
-}
+	chirp, ok := dbStructure.Chirps[id]
+	if !ok {
+		return Chirp{}, ErrNotExist
+	}
 
+	return chirp, nil
+}
