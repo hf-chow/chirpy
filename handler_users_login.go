@@ -3,42 +3,60 @@ package main
 import (
 	"encoding/json"
 	"net/http"
-    "golang.org/x/crypto/bcrypt"
+    "time"
+
+    "github.com/hf-chow/chirpy/internal/auth"
 )
 
 func (cfg *apiConfig) handlerUsersLogin(w http.ResponseWriter, r *http.Request) {
 	type parameters struct {
-		Email       string      `json:"email"`
-        Password    string      `json:"password"`
+		Email               string      `json:"email"`
+        Password            string      `json:"password"`
+        ExpiresInSeconds    int         `json:"expiresinseconds"`
 	}
-
-    dbUsers, err := cfg.DB.GetUsers()
-    if err != nil {
-        respondWithError(w, http.StatusInternalServerError, "Counldn't retrieve users")
+    type response struct {
+        User
+        Token       string  `json:"token"`
     }
 
 	decoder := json.NewDecoder(r.Body)
 	params := parameters{}
-	err = decoder.Decode(&params)
+    err := decoder.Decode(&params)
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Couldn't decode parameters")
 		return
 	}
 
-    for _, dbUser := range dbUsers {
-        if params.Email == dbUser.Email {
-            err = bcrypt.CompareHashAndPassword(dbUser.Password, []byte(params.Password))
-            if err != nil {
-                respondWithError(w, http.StatusUnauthorized, "Incorrect password")
-                return
-            }
-            respondWithJSON(w, http.StatusOK, User {
-                ID:         dbUser.ID,
-                Email:      dbUser.Email,
-            })
-            return
-        }
+    user, err := cfg.DB.GetUserByEmail(params.Email)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Couldn't get user")
+		return
+	}
+
+    err = auth.CheckPasswordHash(params.Password, user.HashedPassword)
+    if err != nil {
+        respondWithError(w, http.StatusUnauthorized, "Invalid password")
+        return
     }
-    respondWithError(w, http.StatusUnauthorized, "User does not exist")
-    return
+
+    defaultExpiration := 60*60*24
+    if params.ExpiresInSeconds == 0 {
+        params.ExpiresInSeconds = defaultExpiration
+    } else if params.ExpiresInSeconds > defaultExpiration {
+        params.ExpiresInSeconds = defaultExpiration
+    }
+
+    token, err := auth.MakeJWT(user.ID, cfg.jwtSecret, time.Duration(params.ExpiresInSeconds)*time.Second)
+    if err != nil {
+        respondWithError(w, http.StatusInternalServerError, "Counldn't create JWT")
+        return
+    }
+
+    respondWithJSON(w, http.StatusOK, response{
+        User: User {
+            ID:     user.ID,
+            Email:  user.Email,
+        },
+        Token: token,
+    })
 }
