@@ -13,10 +13,8 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-// ErrNoAuthHeaderIncluded -
 var ErrNoAuthHeaderIncluded = errors.New("no auth header included in request")
 
-// HashPassword -
 func HashPassword(password string) (string, error) {
 	dat, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
@@ -25,12 +23,10 @@ func HashPassword(password string) (string, error) {
 	return string(dat), nil
 }
 
-// CheckPasswordHash -
 func CheckPasswordHash(password, hash string) error {
 	return bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
 }
 
-// MakeJWT -
 func MakeJWT(
 	userID int,
 	tokenSecret string,
@@ -47,7 +43,6 @@ func MakeJWT(
 	return token.SignedString(signingKey)
 }
 
-// ValidateJWT -
 func ValidateJWT(tokenString, tokenSecret string) (string, error) {
 	claimsStruct := jwt.RegisteredClaims{}
 	token, err := jwt.ParseWithClaims(
@@ -75,7 +70,6 @@ func ValidateJWT(tokenString, tokenSecret string) (string, error) {
 	return userIDString, nil
 }
 
-// GetBearerToken -
 func GetBearerToken(headers http.Header) (string, error) {
 	authHeader := headers.Get("Authorization")
 	if authHeader == "" {
@@ -89,8 +83,6 @@ func GetBearerToken(headers http.Header) (string, error) {
 	return splitAuth[1], nil
 }
 
-// MakeRefreshToken makes a random 256 bit token
-// encoded in hex
 func MakeRefreshToken() (string, error) {
 	token := make([]byte, 32)
 	_, err := rand.Read(token)
@@ -99,3 +91,25 @@ func MakeRefreshToken() (string, error) {
 	}
 	return hex.EncodeToString(token), nil
 }
+
+func GetAPIKey(headers http.Header) (string, error) {
+	authHeader := headers.Get("Authorization")
+	if authHeader == "" {
+		return "", ErrNoAuthHeaderIncluded
+	}
+	splitAuth := strings.Split(authHeader, " ")
+	if len(splitAuth) < 2 || splitAuth[0] != "ApiKey" {
+		return "", errors.New("malformed authorization header")
+	}
+
+	return splitAuth[1], nil
+}
+
+func ValidateAPIKey(key string, secret string) (error) {
+    if key == secret {
+        return nil
+    } else {
+        return errors.New("invalid API Key")
+    }
+}
+
